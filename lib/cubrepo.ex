@@ -97,7 +97,7 @@ defmodule CubRepo do
 
   defp expand_delete_item do
     quote do
-      @spec delete(CubRepo.value()) :: :ok
+      @spec delete(CubDB.value()) :: :ok
       def delete(item)
 
       def delete(%module{@key => key}) do
