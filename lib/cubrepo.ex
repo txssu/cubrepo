@@ -14,6 +14,8 @@ defmodule CubRepo do
     key = Keyword.get(opts, :key, :id)
 
     quote do
+      Module.register_attribute(__MODULE__, :associations, accumulate: true)
+
       @repo unquote(repo)
       @key unquote(key)
 
@@ -24,6 +26,47 @@ defmodule CubRepo do
       unquote(expand_delete_item())
       unquote(expand_delete_by_key())
       unquote(expand_select())
+
+      import CubRepo, only: [deftable: 2]
+      require CubRepo
+
+      @before_compile CubRepo
+    end
+  end
+
+  defmacro deftable(table, module) do
+    quote do
+      @associations {unquote(table), unquote(module)}
+    end
+  end
+
+  defmacro __before_compile__(env) do
+    associations =
+      Module.get_attribute(env.module, :associations)
+
+    associations_functions = Enum.map(associations, &expand_assocation/1)
+
+    quote do
+      unquote(associations_functions)
+
+      def table_to_module(table) do
+        raise """
+        Table "#{table}" not defined. Plase use deftable(#{inspect(table)}, SomeModule) to define table.
+        """
+      end
+
+      def module_to_table(module) do
+        raise """
+        Table with module "#{module}" not defined. Plase use deftable(:some_table, #{inspect(module)}) to define table.
+        """
+      end
+    end
+  end
+
+  defp expand_assocation({table, module}) do
+    quote do
+      def table_to_module(unquote(table)), do: unquote(module)
+      def module_to_table(unquote(module)), do: unquote(table)
     end
   end
 
@@ -41,9 +84,15 @@ defmodule CubRepo do
 
   defp expand_get do
     quote do
-      @spec get(CubRepo.table(), CubDB.key(), CubDB.value()) :: CubDB.value()
-      def get(table, key, default \\ nil) do
-        CubDB.get(@repo, {table, key}, default)
+      @spec get(module(), CubDB.key(), CubDB.value()) :: CubDB.value()
+      def get(module, key, default \\ nil) do
+        table = module_to_table(module)
+        result = CubDB.get(@repo, {table, key}, default)
+
+        case result do
+          nil -> nil
+          fields -> struct(module, fields)
+        end
       end
     end
   end
@@ -53,18 +102,20 @@ defmodule CubRepo do
       @spec save(CubDB.value()) :: :ok
       def save(item)
 
-      def save(%table{@key => key} = item) do
-        CubDB.put(@repo, {table, key}, item)
+      def save(%module{@key => key} = item) do
+        table = module_to_table(module)
+        CubDB.put(@repo, {table, key}, Map.from_struct(item))
       end
     end
   end
 
   defp expand_delete_item do
     quote do
-      @spec delete(CubDB.key()) :: :ok
+      @spec delete(CubRepo.value()) :: :ok
       def delete(item)
 
-      def delete(%table{@key => key}) do
+      def delete(%module{@key => key}) do
+        table = module_to_table(module)
         CubDB.delete(@repo, {table, key})
       end
     end
@@ -81,9 +132,12 @@ defmodule CubRepo do
 
   defp expand_select do
     quote do
-      @spec select(CubRepo.table(), [CubDB.select_option()]) :: Enumerable.t()
-      def select(table, options \\ []) do
+      @spec select(module(), [CubDB.select_option()]) :: Enumerable.t()
+      def select(module, options \\ []) do
+        table = module_to_table(module)
+
         CubRepo.select(@repo, table, options)
+        |> Stream.map(&struct(module, &1))
       end
     end
   end
