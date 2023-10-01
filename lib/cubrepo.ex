@@ -45,17 +45,23 @@ defmodule CubRepo do
     associations_functions = Enum.map(associations, &expand_assocation/1)
 
     quote do
+      @spec table_to_module(CubRepo.table()) :: module()
+      @spec module_to_table(module()) :: CubRepo.table()
       unquote(associations_functions)
 
       def table_to_module(table) do
+        table_name = inspect(table)
+
         raise """
-        Table "#{table}" not defined. Plase use deftable(#{inspect(table)}, SomeModule) to define table.
+        Table "#{table}" not defined. Plase use deftable(#{table_name}, SomeModule) to define table.
         """
       end
 
       def module_to_table(module) do
+        module_name = inspect(module)
+
         raise """
-        Table with module "#{module}" not defined. Plase use deftable(:some_table, #{inspect(module)}) to define table.
+        Table with module "#{module}" not defined. Plase use deftable(:some_table, #{module}) to define table.
         """
       end
     end
@@ -122,7 +128,8 @@ defmodule CubRepo do
       def select(module, options \\ []) do
         table = module_to_table(module)
 
-        CubRepo.select(@repo, table, options)
+        @repo
+        |> CubRepo.select(table, options)
         |> Stream.map(&struct(module, &1))
       end
     end
