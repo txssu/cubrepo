@@ -19,8 +19,6 @@ defmodule CubRepo do
       @repo unquote(repo)
       @key unquote(key)
 
-      unquote(expand_start_link())
-
       unquote(expand_get())
       unquote(expand_save())
       unquote(expand_delete_item())
@@ -67,18 +65,6 @@ defmodule CubRepo do
     quote do
       def table_to_module(unquote(table)), do: unquote(module)
       def module_to_table(unquote(module)), do: unquote(table)
-    end
-  end
-
-  defp expand_start_link do
-    quote do
-      @spec start_link([CubDB.option() | {:data_dir, String.t()} | GenServer.option()]) ::
-              GenServer.on_start()
-      def start_link(options) do
-        [name: @repo]
-        |> Keyword.merge(options)
-        |> CubDB.start_link()
-      end
     end
   end
 
